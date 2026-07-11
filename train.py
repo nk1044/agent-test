@@ -70,13 +70,15 @@ def parse_args():
         "--stages",
         nargs="+",
         default=["data", "pretrain", "sft", "eval"],
-        choices=["data", "pretrain", "sft", "eval"],
-        help="Which pipeline stages to run (default: all)",
+        choices=["data", "pretrain", "sft", "rft", "rl", "eval"],
+        help="Which pipeline stages to run. Recommended full run: data pretrain sft rft rl eval",
     )
 
     # Config files
     parser.add_argument("--pretrain-config", default="config/pretrain.yaml")
     parser.add_argument("--sft-config", default="config/sft.yaml")
+    parser.add_argument("--rl-config", default="config/rl.yaml")
+    parser.add_argument("--rft-config", default="config/rft.yaml")
 
     # Output
     parser.add_argument("--output-dir", default="./outputs")
@@ -231,6 +233,45 @@ def run_sft_stage(args, base_model: str, data_paths: dict, output_dir: str) -> s
     return run_sft(cfg)
 
 
+def run_rft_stage(args, model_path: str, output_dir: str) -> str:
+    """Rejection Sampling Fine-Tuning: generate → verify → SFT on verified solutions."""
+    from src.training.rft_trainer import run_rft_from_config
+
+    logger.info("=== STAGE: Rejection Sampling Fine-Tuning ===")
+
+    config_file = args.rft_config
+    config = load_yaml(config_file) if Path(config_file).exists() else {}
+    config.setdefault("training", {})["output_dir"] = os.path.join(output_dir, "rft")
+
+    if not args.no_wandb:
+        config.setdefault("training", {}).setdefault("report_to", ["wandb", "tensorboard"])
+    else:
+        config.setdefault("training", {})["report_to"] = ["tensorboard"]
+
+    return run_rft_from_config(config, model_path)
+
+
+def run_rl_stage(args, model_path: str, output_dir: str) -> str:
+    """GRPO-based RLVR with code-execution reward signal."""
+    from src.training.rl_trainer import run_rl_from_config
+
+    logger.info("=== STAGE: RLVR (GRPO) ===")
+
+    config_file = args.rl_config
+    config = load_yaml(config_file) if Path(config_file).exists() else {}
+    config.setdefault("training", {})["output_dir"] = os.path.join(output_dir, "rl")
+
+    if not args.no_wandb:
+        config.setdefault("training", {}).setdefault("report_to", ["wandb", "tensorboard"])
+    else:
+        config.setdefault("training", {})["report_to"] = ["tensorboard"]
+
+    if args.deepspeed:
+        config["deepspeed_config"] = args.deepspeed
+
+    return run_rl_from_config(config, model_path)
+
+
 def run_eval_stage(args, model_path: str, data_paths: dict, output_dir: str):
     """Evaluate the final model on the test set."""
     from src.evaluation.cp_evaluator import CPEvaluator, load_test_records
@@ -353,6 +394,14 @@ def main():
         final_model_path = run_sft_stage(
             args, sft_start_model, data_paths, args.output_dir
         )
+
+    # ── Stage: Rejection Sampling Fine-Tuning ────────────────────────────
+    if "rft" in stages:
+        final_model_path = run_rft_stage(args, final_model_path, args.output_dir)
+
+    # ── Stage: RLVR (GRPO) ───────────────────────────────────────────────
+    if "rl" in stages:
+        final_model_path = run_rl_stage(args, final_model_path, args.output_dir)
 
     # ── Stage: Evaluation ─────────────────────────────────────────────────
     if "eval" in stages and Path(data_paths.get("test", "")).exists():

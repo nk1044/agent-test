@@ -14,6 +14,8 @@ Supported sources:
   - opencode_reasoning2   : nvidia/OpenCodeReasoning-2 (~1.5M, higher quality)
   - kodcode               : KodCode/KodCode (447K verified problems with unit tests)
   - code_feedback         : m-a-p/CodeFeedback-Filtered-Instruction (157K curated OSS pairs)
+  - bigcodebench          : bigcode/bigcodebench (1,140 realistic function-level tasks + unittest)
+  - magicoder_evol        : ise-uiuc/Magicoder-Evol-Instruct-110K (110K diverse evolved instructions)
 """
 
 from __future__ import annotations
@@ -97,6 +99,18 @@ DATASET_REGISTRY: Dict[str, Dict] = {
     },
     "code_feedback": {
         "path": "m-a-p/CodeFeedback-Filtered-Instruction",
+        "split": "train",
+        "config_name": None,
+        "trust_remote_code": False,
+    },
+    "bigcodebench": {
+        "path": "bigcode/bigcodebench",
+        "split": "v0.1.2",        # stable release split name on HuggingFace
+        "config_name": None,
+        "trust_remote_code": False,
+    },
+    "magicoder_evol": {
+        "path": "ise-uiuc/Magicoder-Evol-Instruct-110K",
         "split": "train",
         "config_name": None,
         "trust_remote_code": False,

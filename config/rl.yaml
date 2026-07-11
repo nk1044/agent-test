@@ -1,0 +1,44 @@
+# GRPO-based RLVR Configuration
+# Trains the SFT model using execution-verified rewards from test case pass rates.
+# Run after SFT: python train.py --stages rl
+stage: rl
+
+# Training hyperparameters
+training:
+  output_dir: "./outputs/rl"
+  num_train_epochs: 2
+  per_device_train_batch_size: 1       # keep low; GRPO generates G solutions per step
+  gradient_accumulation_steps: 16
+  learning_rate: 5.0e-7                # much lower than SFT — fine policy adjustment
+  lr_scheduler_type: "cosine"
+  warmup_ratio: 0.05
+  bf16: true
+  gradient_checkpointing: true
+  logging_steps: 5
+  save_steps: 100
+  save_total_limit: 2
+  seed: 42
+  report_to: ["wandb", "tensorboard"]
+  run_name: "cp-llm-rl"
+
+# GRPO-specific generation parameters
+grpo:
+  num_generations: 8       # G: solutions sampled per problem per step
+  max_new_tokens: 2048
+  temperature: 0.9         # high temperature encourages exploration
+  top_p: 0.95
+  kl_coeff: 0.04           # beta: KL penalty weight against reference policy
+
+# Reward function weights (execution reward is dominant by design)
+reward:
+  execution_weight: 1.0    # fraction of test cases passed  →  0.0–1.0
+  format_weight: 0.1       # bonus for syntactically valid Python
+  efficiency_weight: 0.05  # bonus for solving in < 1 second
+
+# Code execution sandbox
+sandbox:
+  timeout_seconds: 10.0
+  memory_limit_mb: 512
+  max_output_bytes: 65536
+
+deepspeed_config: "./config/ds_zero2.json"

@@ -412,6 +412,59 @@ def normalize_code_feedback(record: Dict) -> Optional[Dict]:
     }
 
 
+def normalize_bigcodebench(record: Dict) -> Optional[Dict]:
+    """Normalize bigcode/bigcodebench record.
+
+    Schema: task_id, instruct_prompt, complete_prompt, canonical_solution,
+            code_prompt, test (Python unittest), libs, entry_point.
+    The 'test' field is Python unittest code — kept for execution-based RL.
+    """
+    problem = _clean_text(
+        record.get("instruct_prompt") or record.get("complete_prompt") or ""
+    )
+    if not problem:
+        return None
+
+    solution = record.get("canonical_solution") or ""
+    solutions = [solution.strip()] if solution.strip() else []
+
+    test_code = record.get("test") or ""
+
+    return {
+        "problem": problem,
+        "solutions": solutions,
+        "examples": [],
+        "difficulty": "hard",   # BigCodeBench problems are consistently hard
+        "tags": record.get("libs") or [],
+        "source": "bigcodebench",
+        "language": "python",
+        "test_code": test_code,
+    }
+
+
+def normalize_magicoder_evol(record: Dict) -> Optional[Dict]:
+    """Normalize ise-uiuc/Magicoder-Evol-Instruct-110K record.
+
+    Schema: instruction (coding problem), response (solution + explanation).
+    """
+    problem = _clean_text(record.get("instruction") or "")
+    if not problem:
+        return None
+
+    solution = record.get("response") or ""
+    solutions = [solution.strip()] if solution.strip() else []
+
+    return {
+        "problem": problem,
+        "solutions": solutions,
+        "examples": [],
+        "difficulty": "unknown",
+        "tags": [],
+        "source": "magicoder_evol",
+        "language": "python",
+    }
+
+
 def normalize_generic(record: Dict, source: str = "unknown") -> Optional[Dict]:
     """Best-effort normalization for unrecognized datasets."""
     problem = (
@@ -457,6 +510,8 @@ NORMALIZER_MAP = {
     "opencode_reasoning2": normalize_opencode_reasoning2,
     "kodcode": normalize_kodcode,
     "code_feedback": normalize_code_feedback,
+    "bigcodebench": normalize_bigcodebench,
+    "magicoder_evol": normalize_magicoder_evol,
 }
 
 
