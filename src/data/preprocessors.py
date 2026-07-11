@@ -322,6 +322,96 @@ def normalize_leetcode(record: Dict) -> Optional[Dict]:
     }
 
 
+def normalize_opencode_reasoning(record: Dict) -> Optional[Dict]:
+    """Normalize nvidia/OpenCodeReasoning record.
+
+    Schema: question, answer (code solution), difficulty, source, language, reasoning (optional).
+    """
+    problem = _clean_text(
+        record.get("question") or record.get("problem") or record.get("description") or ""
+    )
+    if not problem:
+        return None
+
+    solution = record.get("answer") or record.get("solution") or record.get("code") or ""
+    solutions = [solution.strip()] if isinstance(solution, str) and solution.strip() else []
+
+    reasoning = record.get("reasoning") or record.get("chain_of_thought") or ""
+
+    return {
+        "problem": problem,
+        "solutions": solutions,
+        "examples": [],
+        "difficulty": _difficulty_normalize(record.get("difficulty")),
+        "tags": record.get("tags") or [],
+        "source": "opencode_reasoning",
+        "language": str(record.get("language") or "python").lower(),
+        "reasoning": reasoning,
+    }
+
+
+def normalize_opencode_reasoning2(record: Dict) -> Optional[Dict]:
+    """Normalize nvidia/OpenCodeReasoning-2 record (same schema as v1, stricter filtering)."""
+    result = normalize_opencode_reasoning(record)
+    if result:
+        result["source"] = "opencode_reasoning2"
+    return result
+
+
+def normalize_kodcode(record: Dict) -> Optional[Dict]:
+    """Normalize KodCode/KodCode record.
+
+    Schema: question/problem, solution, test_code (unit tests), difficulty, tags.
+    Unit tests are stored in test_code — attach them so RLVR can use them later.
+    """
+    problem = _clean_text(
+        record.get("question") or record.get("problem") or record.get("prompt") or ""
+    )
+    if not problem:
+        return None
+
+    solution = record.get("solution") or record.get("answer") or record.get("code") or ""
+    solutions = [solution.strip()] if isinstance(solution, str) and solution.strip() else []
+
+    test_code = record.get("test_code") or record.get("tests") or record.get("unit_tests") or ""
+
+    return {
+        "problem": problem,
+        "solutions": solutions,
+        "examples": [],
+        "difficulty": _difficulty_normalize(record.get("difficulty")),
+        "tags": record.get("tags") or [],
+        "source": "kodcode",
+        "language": str(record.get("language") or "python").lower(),
+        "test_code": test_code,  # preserved for execution-based RL later
+    }
+
+
+def normalize_code_feedback(record: Dict) -> Optional[Dict]:
+    """Normalize m-a-p/CodeFeedback-Filtered-Instruction record.
+
+    Schema: query (instruction), answer (code), lang.
+    """
+    problem = _clean_text(
+        record.get("query") or record.get("instruction") or record.get("question") or ""
+    )
+    if not problem:
+        return None
+
+    solution = record.get("answer") or record.get("response") or record.get("output") or ""
+    solutions = [solution.strip()] if isinstance(solution, str) and solution.strip() else []
+
+    return {
+        "problem": problem,
+        "solutions": solutions,
+        "examples": [],
+        "difficulty": "unknown",
+        "tags": [],
+        "source": "code_feedback",
+        "language": str(record.get("lang") or "python").lower(),
+    }
+
+
 def normalize_generic(record: Dict, source: str = "unknown") -> Optional[Dict]:
     """Best-effort normalization for unrecognized datasets."""
     problem = (
@@ -363,6 +453,10 @@ NORMALIZER_MAP = {
     "codeforces": normalize_codeforces,
     "codeforces_cots": normalize_codeforces_cots,
     "leetcode": normalize_leetcode,
+    "opencode_reasoning": normalize_opencode_reasoning,
+    "opencode_reasoning2": normalize_opencode_reasoning2,
+    "kodcode": normalize_kodcode,
+    "code_feedback": normalize_code_feedback,
 }
 
 

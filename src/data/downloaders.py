@@ -2,13 +2,18 @@
 Dataset downloaders for competitive programming datasets.
 
 Supported sources:
-  - taco          : BAAI/TACO
-  - apps          : codeparrot/apps
-  - code_contests : deepmind/code_contests
-  - codeforces    : open-r1/codeforces (Codeforces problems with solutions)
-  - codeforces_cf : codeforces/codeforces-cots (chain-of-thought)
-  - aizu          : the AIZU Online Judge mirror (if available)
-  - leetcode_hard : greengerong/leetcode filtered to Hard only
+  - taco                  : BAAI/TACO
+  - apps                  : codeparrot/apps
+  - code_contests         : deepmind/code_contests
+  - codeforces            : open-r1/codeforces (Codeforces problems with solutions)
+  - codeforces_cots       : open-r1/codeforces-cots (chain-of-thought)
+  - leetcode              : greengerong/leetcode filtered to Hard/Medium only
+  - amc_aime              : math-ai/amc_aime
+  - project_euler         : ajibawa-2023/project_euler
+  - opencode_reasoning    : nvidia/OpenCodeReasoning (736K CP problems + reasoning traces)
+  - opencode_reasoning2   : nvidia/OpenCodeReasoning-2 (~1.5M, higher quality)
+  - kodcode               : KodCode/KodCode (447K verified problems with unit tests)
+  - code_feedback         : m-a-p/CodeFeedback-Filtered-Instruction (157K curated OSS pairs)
 """
 
 from __future__ import annotations
@@ -67,6 +72,31 @@ DATASET_REGISTRY: Dict[str, Dict] = {
     },
     "project_euler": {
         "path": "ajibawa-2023/project_euler",
+        "split": "train",
+        "config_name": None,
+        "trust_remote_code": False,
+    },
+    # High-quality additions
+    "opencode_reasoning": {
+        "path": "nvidia/OpenCodeReasoning",
+        "split": "train",
+        "config_name": None,
+        "trust_remote_code": False,
+    },
+    "opencode_reasoning2": {
+        "path": "nvidia/OpenCodeReasoning-2",
+        "split": "train",
+        "config_name": None,
+        "trust_remote_code": False,
+    },
+    "kodcode": {
+        "path": "KodCode/KodCode",
+        "split": "train",
+        "config_name": None,
+        "trust_remote_code": False,
+    },
+    "code_feedback": {
+        "path": "m-a-p/CodeFeedback-Filtered-Instruction",
         "split": "train",
         "config_name": None,
         "trust_remote_code": False,
