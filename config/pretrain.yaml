@@ -9,7 +9,7 @@ data:
   processed_dir: "./data/processed"
   train_file: "train.jsonl"
   val_file: "val.jsonl"
-  max_seq_length: 4096
+  max_seq_length: 8192
   text_field: "text"
 
 # Training hyperparameters
@@ -45,7 +45,7 @@ training:
 
 # Packing (combine short sequences for efficiency)
 packing: true
-packing_max_seq_length: 4096
+packing_max_seq_length: 8192
 
 # DeepSpeed config (null = use accelerate defaults)
 deepspeed_config: "./config/ds_zero2.json"

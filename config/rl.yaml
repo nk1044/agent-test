@@ -24,7 +24,7 @@ training:
 # GRPO-specific generation parameters
 grpo:
   num_generations: 8       # G: solutions sampled per problem per step
-  max_new_tokens: 2048
+  max_new_tokens: 4096
   temperature: 0.9         # high temperature encourages exploration
   top_p: 0.95
   kl_coeff: 0.04           # beta: KL penalty weight against reference policy
@@ -40,5 +40,12 @@ sandbox:
   timeout_seconds: 10.0
   memory_limit_mb: 512
   max_output_bytes: 65536
+
+# Curriculum difficulty filter (None = all, 'medium' = medium+hard, 'hard' = hard only)
+# When using --rl-rounds 3, this is set automatically per round. Override here for manual control.
+difficulty_filter: null
+
+# Which RL round this config applies to (informational only)
+rl_round: 1
 
 deepspeed_config: "./config/ds_zero2.json"

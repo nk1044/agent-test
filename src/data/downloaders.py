@@ -2,20 +2,22 @@
 Dataset downloaders for competitive programming datasets.
 
 Supported sources:
-  - taco                  : BAAI/TACO
-  - apps                  : codeparrot/apps
-  - code_contests         : deepmind/code_contests
-  - codeforces            : open-r1/codeforces (Codeforces problems with solutions)
-  - codeforces_cots       : open-r1/codeforces-cots (chain-of-thought)
-  - leetcode              : greengerong/leetcode filtered to Hard/Medium only
-  - amc_aime              : math-ai/amc_aime
-  - project_euler         : ajibawa-2023/project_euler
-  - opencode_reasoning    : nvidia/OpenCodeReasoning (736K CP problems + reasoning traces)
-  - opencode_reasoning2   : nvidia/OpenCodeReasoning-2 (~1.5M, higher quality)
-  - kodcode               : KodCode/KodCode (447K verified problems with unit tests)
-  - code_feedback         : m-a-p/CodeFeedback-Filtered-Instruction (157K curated OSS pairs)
-  - bigcodebench          : bigcode/bigcodebench (1,140 realistic function-level tasks + unittest)
-  - magicoder_evol        : ise-uiuc/Magicoder-Evol-Instruct-110K (110K diverse evolved instructions)
+  - taco                      : BAAI/TACO
+  - apps                      : codeparrot/apps
+  - code_contests             : deepmind/code_contests
+  - codeforces                : open-r1/codeforces (Codeforces problems with solutions)
+  - codeforces_cots           : open-r1/codeforces-cots (chain-of-thought)
+  - leetcode                  : greengerong/leetcode filtered to Hard/Medium only
+  - amc_aime                  : math-ai/amc_aime
+  - project_euler             : ajibawa-2023/project_euler
+  - opencode_reasoning        : nvidia/OpenCodeReasoning (736K CP problems + reasoning traces)
+  - opencode_reasoning2       : nvidia/OpenCodeReasoning-2 (~1.5M, higher quality)
+  - kodcode                   : KodCode/KodCode (447K verified problems with unit tests)
+  - code_feedback             : m-a-p/CodeFeedback-Filtered-Instruction (157K curated OSS pairs)
+  - bigcodebench              : bigcode/bigcodebench (1,140 realistic function-level tasks + unittest)
+  - magicoder_evol            : ise-uiuc/Magicoder-Evol-Instruct-110K (110K diverse evolved instructions)
+  - aizu                      : BAAI/AIZU-OJ (AIZU Online Judge hard algorithmic problems)
+  - competitive_programming_v4: deepmind/competitive_programming (hard CP problems)
 """
 
 from __future__ import annotations
@@ -111,6 +113,18 @@ DATASET_REGISTRY: Dict[str, Dict] = {
     },
     "magicoder_evol": {
         "path": "ise-uiuc/Magicoder-Evol-Instruct-110K",
+        "split": "train",
+        "config_name": None,
+        "trust_remote_code": False,
+    },
+    "aizu": {
+        "path": "BAAI/AIZU-OJ",
+        "split": "train",
+        "config_name": None,
+        "trust_remote_code": False,
+    },
+    "competitive_programming_v4": {
+        "path": "deepmind/competitive_programming",
         "split": "train",
         "config_name": None,
         "trust_remote_code": False,

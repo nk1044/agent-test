@@ -23,13 +23,23 @@ logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Recommended base models (shorthand aliases → HuggingFace model IDs)
+#
+# Primary recommendation: Qwen/Qwen2.5-Coder-7B
+#   - Best coding 7B dense model; strongest ≤10B choice for full fine-tuning
+#
+# Alternative: deepseek-ai/DeepSeek-Coder-V2-Lite-Base
+#   - 16B MoE, 2.4B active params. Inference cost ≈ 2.4B dense but model
+#     knowledge ≈ 16B. Excellent on hard algorithmic problems.
+#   - Use if you have enough VRAM to load 16B total weights (~32GB).
 # ---------------------------------------------------------------------------
 
 RECOMMENDED_MODELS = {
-    # 7B coding-focused (primary targets)
+    # Primary — best coding 7B dense model
     "qwen2.5-coder-7b": "Qwen/Qwen2.5-Coder-7B",
     "qwen2.5-coder-7b-instruct": "Qwen/Qwen2.5-Coder-7B-Instruct",
+    # MoE alternative — 16B total / 2.4B active, stronger on hard problems
     "deepseek-coder-v2-lite": "deepseek-ai/DeepSeek-Coder-V2-Lite-Base",
+    "deepseek-coder-v2-lite-instruct": "deepseek-ai/DeepSeek-Coder-V2-Lite-Instruct",
     # Smaller fallbacks
     "qwen2.5-coder-1.5b": "Qwen/Qwen2.5-Coder-1.5B",
     "deepseek-coder-1.3b": "deepseek-ai/deepseek-coder-1.3b-base",

@@ -465,6 +465,59 @@ def normalize_magicoder_evol(record: Dict) -> Optional[Dict]:
     }
 
 
+def normalize_aizu(record: Dict) -> Optional[Dict]:
+    """Normalize BAAI/AIZU-OJ record."""
+    problem = _clean_text(
+        record.get("problem_statement") or record.get("description") or record.get("problem") or ""
+    )
+    if not problem:
+        return None
+
+    solution = record.get("solution") or record.get("code") or ""
+    solutions = [solution.strip()] if solution.strip() else []
+
+    examples: List[Dict[str, str]] = []
+    for inp, out in zip(
+        record.get("sample_inputs") or record.get("inputs") or [],
+        record.get("sample_outputs") or record.get("outputs") or [],
+    ):
+        examples.append({"input": str(inp).strip(), "output": str(out).strip()})
+
+    return {
+        "problem": problem,
+        "solutions": solutions,
+        "examples": examples[:5],
+        "difficulty": _difficulty_normalize(record.get("difficulty") or record.get("level")),
+        "tags": record.get("tags") or record.get("categories") or [],
+        "source": "aizu",
+        "language": "python",
+    }
+
+
+def normalize_competitive_programming_v4(record: Dict) -> Optional[Dict]:
+    """Normalize deepmind/competitive_programming record."""
+    problem = _clean_text(record.get("description") or record.get("problem") or "")
+    if not problem:
+        return None
+
+    solutions = _pick_solutions(record.get("solutions") or [])
+
+    examples: List[Dict[str, str]] = []
+    pub = record.get("public_tests") or {}
+    for inp, out in zip(pub.get("input", []), pub.get("output", [])):
+        examples.append({"input": str(inp).strip(), "output": str(out).strip()})
+
+    return {
+        "problem": problem,
+        "solutions": solutions,
+        "examples": examples[:5],
+        "difficulty": _difficulty_normalize(record.get("cf_rating") or record.get("difficulty")),
+        "tags": record.get("cf_tags") or [],
+        "source": "competitive_programming_v4",
+        "language": "python",
+    }
+
+
 def normalize_generic(record: Dict, source: str = "unknown") -> Optional[Dict]:
     """Best-effort normalization for unrecognized datasets."""
     problem = (
@@ -512,6 +565,8 @@ NORMALIZER_MAP = {
     "code_feedback": normalize_code_feedback,
     "bigcodebench": normalize_bigcodebench,
     "magicoder_evol": normalize_magicoder_evol,
+    "aizu": normalize_aizu,
+    "competitive_programming_v4": normalize_competitive_programming_v4,
 }
 
 

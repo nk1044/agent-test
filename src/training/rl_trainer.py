@@ -168,6 +168,32 @@ def score_against_unittests(
     return max(0.0, n_passed / n_ran), elapsed
 
 
+_SELF_TEST_RE = re.compile(r"<tests>(.*?)</tests>", re.DOTALL)
+_THINK_RE = re.compile(r"<think>(.*?)</think>", re.DOTALL)
+
+
+def extract_self_tests(completion: str) -> List[Dict]:
+    """Parse <tests> block. Expects lines like: INPUT -> OUTPUT"""
+    match = _SELF_TEST_RE.search(completion)
+    if not match:
+        return []
+    examples = []
+    for line in match.group(1).strip().splitlines():
+        line = line.strip()
+        if "->" in line:
+            parts = line.split("->", 1)
+            examples.append({"input": parts[0].strip(), "output": parts[1].strip()})
+    return examples[:5]
+
+
+def has_reasoning(completion: str) -> bool:
+    """Check if the model produced a non-trivial <think> block."""
+    match = _THINK_RE.search(completion)
+    if not match:
+        return False
+    return len(match.group(1).strip()) > 50
+
+
 # ---------------------------------------------------------------------------
 # Reward functions (GRPO-compatible signatures)
 # ---------------------------------------------------------------------------
@@ -202,15 +228,18 @@ def make_reward_fn(
         for i, completion in enumerate(completions):
             code = extract_code(completion)
 
-            # --- format reward ---
+            # --- format reward (small, prevents degenerate outputs) ---
             fmt_bonus = format_weight if is_valid_python(code) else 0.0
 
-            # --- execution reward ---
+            # --- reasoning reward (incentivise <think> blocks) ---
+            reasoning_bonus = 0.08 if has_reasoning(completion) else 0.0
+
+            # --- execution reward against provided tests ---
             ex_list = (examples[i] if examples and i < len(examples) else None) or []
             tc = (test_code[i] if test_code and i < len(test_code) else None) or ""
 
             exec_score = 0.0
-            avg_elapsed = exec_timeout  # pessimistic default
+            avg_elapsed = exec_timeout
 
             if ex_list:
                 exec_score, avg_elapsed = score_against_examples(code, ex_list, timeout=exec_timeout)
@@ -219,12 +248,22 @@ def make_reward_fn(
 
             exec_r = exec_weight * exec_score
 
-            # --- efficiency reward (only awarded on full pass) ---
+            # --- self-test reward: model's OWN generated test cases ---
+            # Only awarded when the model already passes provided tests — prevents
+            # the model from gaming the reward by writing trivially easy self-tests.
+            self_test_bonus = 0.0
+            if exec_score >= 1.0 or not ex_list:
+                self_tests = extract_self_tests(completion)
+                if self_tests and is_valid_python(code):
+                    st_rate, _ = score_against_examples(code, self_tests, timeout=exec_timeout)
+                    self_test_bonus = 0.15 * st_rate
+
+            # --- efficiency reward (only on full pass) ---
             eff_bonus = 0.0
             if exec_score >= 1.0 and avg_elapsed < _FAST_THRESHOLD_S:
                 eff_bonus = efficiency_weight
 
-            total = min(1.0, exec_r + fmt_bonus + eff_bonus)
+            total = min(1.0, exec_r + fmt_bonus + reasoning_bonus + self_test_bonus + eff_bonus)
             rewards.append(total)
 
         return rewards
@@ -237,15 +276,18 @@ def make_reward_fn(
 # ---------------------------------------------------------------------------
 
 SYSTEM_PROMPT = (
-    "You are an expert competitive programmer. "
-    "Think step by step, then write a complete, runnable Python solution. "
-    "Wrap your code in ```python ... ``` fences."
+    "You are a world-class competitive programmer. Your ONLY task is solving coding problems. "
+    "You refuse all non-coding requests. "
+    "For every problem: (1) think step-by-step inside <think>...</think> tags, "
+    "(2) identify the algorithm and edge cases, "
+    "(3) write a complete runnable Python solution in ```python...``` fences, "
+    "(4) write 3–5 of your own test cases inside <tests>...</tests> tags to verify your solution."
 )
 
 SFT_TEMPLATE = (
     "<|im_start|>system\n{system}<|im_end|>\n"
     "<|im_start|>user\n{problem}<|im_end|>\n"
-    "<|im_start|>assistant\n"
+    "<|im_start|>assistant\n<think>\n"
 )
 
 
@@ -261,8 +303,11 @@ def _build_prompt(record: Dict) -> str:
     return SFT_TEMPLATE.format(system=SYSTEM_PROMPT, problem=problem + ex_block)
 
 
-def build_rl_dataset(jsonl_path: str) -> Dataset:
-    """Load SFT JSONL and reformat for GRPO (adds 'prompt' field)."""
+def build_rl_dataset(jsonl_path: str, difficulty_filter: Optional[str] = None) -> Dataset:
+    """Load SFT JSONL and reformat for GRPO (adds 'prompt' field).
+
+    difficulty_filter: None = all, 'medium' = medium+hard only, 'hard' = hard only
+    """
     records = []
     with open(jsonl_path) as f:
         for line in f:
@@ -273,6 +318,14 @@ def build_rl_dataset(jsonl_path: str) -> Dataset:
                 rec = json.loads(line)
             except json.JSONDecodeError:
                 continue
+
+            # difficulty curriculum filter
+            if difficulty_filter:
+                diff = rec.get("difficulty", "unknown")
+                if difficulty_filter == "hard" and diff not in ("hard",):
+                    continue
+                if difficulty_filter == "medium" and diff not in ("medium", "hard"):
+                    continue
 
             examples = rec.get("examples") or []
             test_code = rec.get("test_code") or ""
@@ -333,6 +386,8 @@ class RLConfig:
     efficiency_weight: float = 0.05
 
     deepspeed_config: Optional[str] = None
+    difficulty_filter: Optional[str] = None  # None | 'medium' | 'hard'
+    rl_round: int = 1  # current round number (for logging)
 
 
 # ---------------------------------------------------------------------------
@@ -360,7 +415,7 @@ def run_rl_training(cfg: RLConfig) -> str:
     )
 
     # Dataset
-    train_dataset = build_rl_dataset(cfg.train_file)
+    train_dataset = build_rl_dataset(cfg.train_file, difficulty_filter=cfg.difficulty_filter)
     if len(train_dataset) == 0:
         raise RuntimeError(
             "RL dataset is empty — no problems with verifiable test cases found. "
@@ -446,5 +501,7 @@ def run_rl_from_config(config: Dict, sft_model_path: str) -> str:
         exec_weight=reward_cfg.get("execution_weight", 1.0),
         format_weight=reward_cfg.get("format_weight", 0.1),
         efficiency_weight=reward_cfg.get("efficiency_weight", 0.05),
+        difficulty_filter=config.get("difficulty_filter"),
+        rl_round=config.get("rl_round", 1),
     )
     return run_rl_training(cfg)

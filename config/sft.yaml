@@ -10,7 +10,7 @@ data:
   processed_dir: "./data/processed"
   train_file: "sft_train.jsonl"
   val_file: "sft_val.jsonl"
-  max_seq_length: 4096
+  max_seq_length: 8192
   prompt_field: "prompt"
   response_field: "response"
   # Mask loss on prompt tokens (only learn to generate the solution)

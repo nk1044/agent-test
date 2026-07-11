@@ -34,6 +34,7 @@ import logging
 import os
 import sys
 from pathlib import Path
+from typing import Optional
 
 from src.utils.helpers import load_yaml, save_yaml, set_seed, setup_logging
 
@@ -113,6 +114,18 @@ def parse_args():
     parser.add_argument("--no-wandb", action="store_true")
     parser.add_argument("--log-level", default="INFO")
     parser.add_argument("--flash-attention", action="store_true")
+    parser.add_argument(
+        "--rl-rounds", type=int, default=1,
+        help="Number of iterative RLVR rounds (default 1; 3 recommended for max performance)",
+    )
+    parser.add_argument(
+        "--verify-sft", action="store_true",
+        help="Execution-verify all SFT training examples (slower data prep, much higher quality)",
+    )
+    parser.add_argument(
+        "--rl-difficulty", default=None, choices=[None, "medium", "hard"],
+        help="Difficulty filter for RL training data (None=all, medium=medium+hard, hard=hard only)",
+    )
     parser.add_argument("--skip-existing-data", action="store_true",
                         help="Skip data download if processed files already exist")
     parser.add_argument(
@@ -159,6 +172,7 @@ def run_data_stage(args, datasets: list, data_dir: str) -> dict:
         dedup_threshold=args.dedup_threshold,
         cp_filter=CPFilter(),
         seed=args.seed,
+        verify_sft=args.verify_sft,
     )
     return builder.run()
 
@@ -251,18 +265,22 @@ def run_rft_stage(args, model_path: str, output_dir: str) -> str:
     return run_rft_from_config(config, model_path)
 
 
-def run_rl_stage(args, model_path: str, output_dir: str) -> str:
+def run_rl_stage(args, model_path: str, output_dir: str, round_num: int = 1, difficulty: Optional[str] = None) -> str:
     """GRPO-based RLVR with code-execution reward signal."""
     from src.training.rl_trainer import run_rl_from_config
 
-    logger.info("=== STAGE: RLVR (GRPO) ===")
+    logger.info("=== STAGE: RLVR (GRPO) — Round %d ===", round_num)
 
     config_file = args.rl_config
     config = load_yaml(config_file) if Path(config_file).exists() else {}
-    config.setdefault("training", {})["output_dir"] = os.path.join(output_dir, "rl")
+    round_output = os.path.join(output_dir, f"rl_round{round_num}")
+    config.setdefault("training", {})["output_dir"] = round_output
+    config["difficulty_filter"] = difficulty
+    config["rl_round"] = round_num
 
     if not args.no_wandb:
         config.setdefault("training", {}).setdefault("report_to", ["wandb", "tensorboard"])
+        config["training"]["run_name"] = f"cp-llm-rl-r{round_num}"
     else:
         config.setdefault("training", {})["report_to"] = ["tensorboard"]
 
@@ -399,9 +417,21 @@ def main():
     if "rft" in stages:
         final_model_path = run_rft_stage(args, final_model_path, args.output_dir)
 
-    # ── Stage: RLVR (GRPO) ───────────────────────────────────────────────
+    # ── Stage: RLVR (GRPO) — supports multiple iterative rounds ──────────
     if "rl" in stages:
-        final_model_path = run_rl_stage(args, final_model_path, args.output_dir)
+        for rl_round in range(1, args.rl_rounds + 1):
+            if args.rl_rounds > 1:
+                logger.info("=== RLVR Round %d/%d ===", rl_round, args.rl_rounds)
+            # Curriculum: if running 3 rounds, escalate difficulty
+            difficulty = args.rl_difficulty
+            if args.rl_rounds >= 3:
+                if rl_round == 1:
+                    difficulty = None          # all difficulties in round 1
+                elif rl_round == 2:
+                    difficulty = "medium"      # medium+hard in round 2
+                else:
+                    difficulty = "hard"        # hard only in round 3
+            final_model_path = run_rl_stage(args, final_model_path, args.output_dir, round_num=rl_round, difficulty=difficulty)
 
     # ── Stage: Evaluation ─────────────────────────────────────────────────
     if "eval" in stages and Path(data_paths.get("test", "")).exists():

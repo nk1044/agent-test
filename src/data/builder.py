@@ -11,6 +11,10 @@ import json
 import logging
 import os
 import random
+import subprocess
+import sys
+import tempfile
+import time
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
@@ -116,6 +120,7 @@ class DatasetBuilder:
         max_solutions_per_problem: int = 3,
         cp_filter: Optional[CPFilter] = None,
         seed: int = 42,
+        verify_sft: bool = False,
     ):
         self.dataset_names = dataset_names
         self.output_dir = Path(output_dir)
@@ -126,6 +131,7 @@ class DatasetBuilder:
         self.max_solutions_per_problem = max_solutions_per_problem
         self.cp_filter = cp_filter or CPFilter()
         self.seed = seed
+        self.verify_sft = verify_sft
 
     def run(self) -> Dict[str, str]:
         """
@@ -197,10 +203,14 @@ class DatasetBuilder:
             self._save_pretrain(records, path)
             output_paths[f"pretrain_{split_name}"] = str(path)
 
-        # SFT files (prompt/response pairs)
+        # SFT files (prompt/response pairs) — optionally execution-verified
         for split_name, records in [("train", train_records), ("val", val_records)]:
             path = self.output_dir / f"sft_{split_name}.jsonl"
-            self._save_sft(records, path)
+            if self.verify_sft and split_name == "train":
+                logger.info("Running execution verification on SFT train set (slow but high quality)...")
+                self._save_sft_verified(records, path)
+            else:
+                self._save_sft(records, path)
             output_paths[f"sft_{split_name}"] = str(path)
 
         # Test set (raw normalized records)
@@ -236,6 +246,112 @@ class DatasetBuilder:
                     f.write(json.dumps({"text": text}) + "\n")
                     texts_saved += 1
         logger.info("Saved %d pretrain examples to %s", texts_saved, path)
+
+    def _save_sft_verified(self, records: List[Dict], path: Path, timeout: float = 8.0) -> None:
+        """Save SFT pairs, but only those whose solutions pass execution against examples."""
+        pairs_saved = 0
+        pairs_skipped = 0
+        with open(path, "w") as f:
+            for record in records:
+                solutions = [s.strip() for s in (record.get("solutions") or []) if s.strip()]
+                examples = record.get("examples") or []
+                test_code = record.get("test_code") or ""
+                problem = record.get("problem", "").strip()
+
+                if not problem or not solutions:
+                    pairs_skipped += 1
+                    continue
+
+                # If no verifiable test cases, fall back to unverified (keep it)
+                if not examples and not test_code:
+                    pair = record_to_sft_pair(record)
+                    if pair:
+                        f.write(json.dumps(pair) + "\n")
+                        pairs_saved += 1
+                    continue
+
+                # Find first solution that passes
+                verified_solution = None
+                for sol in solutions:
+                    passed = self._quick_verify(sol, examples, test_code, timeout)
+                    if passed:
+                        verified_solution = sol
+                        break
+
+                if verified_solution is None:
+                    pairs_skipped += 1
+                    continue
+
+                # Build pair using the verified solution
+                modified_record = dict(record)
+                modified_record["solutions"] = [verified_solution]
+                pair = record_to_sft_pair(modified_record)
+                if pair:
+                    f.write(json.dumps(pair) + "\n")
+                    pairs_saved += 1
+
+        logger.info(
+            "Verified SFT: saved %d, skipped %d (no passing solution) to %s",
+            pairs_saved, pairs_skipped, path,
+        )
+
+    def _quick_verify(self, code: str, examples: List[Dict], test_code: str, timeout: float) -> bool:
+        """Run code against examples or unit tests. Returns True if it passes."""
+        MAX_OUT = 32768
+
+        def _normalize(s: str) -> str:
+            return "\n".join(line.rstrip() for line in s.strip().splitlines())
+
+        if examples:
+            for ex in examples[:3]:  # check first 3 examples only for speed
+                stdin = ex.get("input", "")
+                expected = _normalize(ex.get("output", ""))
+                with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as f:
+                    f.write(code)
+                    tmpfile = f.name
+                try:
+                    proc = subprocess.run(
+                        [sys.executable, tmpfile],
+                        input=stdin, capture_output=True, text=True,
+                        timeout=timeout,
+                        env={**os.environ, "PYTHONPATH": ""},
+                    )
+                    actual = _normalize(proc.stdout[:MAX_OUT])
+                    if actual != expected:
+                        return False
+                except subprocess.TimeoutExpired:
+                    return False
+                except Exception:
+                    return False
+                finally:
+                    try:
+                        os.unlink(tmpfile)
+                    except OSError:
+                        pass
+            return True
+
+        if test_code and test_code.strip():
+            combined = f"{code}\n\n{test_code}\n\nimport unittest\nif __name__ == '__main__':\n    unittest.main(verbosity=0)\n"
+            with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as f:
+                f.write(combined)
+                tmpfile = f.name
+            try:
+                proc = subprocess.run(
+                    [sys.executable, tmpfile],
+                    capture_output=True, text=True,
+                    timeout=timeout + 5,
+                    env={**os.environ, "PYTHONPATH": ""},
+                )
+                return proc.returncode == 0
+            except Exception:
+                return False
+            finally:
+                try:
+                    os.unlink(tmpfile)
+                except OSError:
+                    pass
+
+        return False
 
     def _save_sft(self, records: List[Dict], path: Path) -> None:
         pairs_saved = 0
