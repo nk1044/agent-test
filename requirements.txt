@@ -1,0 +1,43 @@
+# Core ML
+torch>=2.1.0
+torchvision>=0.16.0
+
+# HuggingFace ecosystem
+transformers>=4.44.0
+accelerate>=0.33.0
+datasets>=2.20.0
+tokenizers>=0.19.0
+peft>=0.12.0
+trl>=0.9.0
+evaluate>=0.4.0
+huggingface-hub>=0.24.0
+
+# DeepSpeed for distributed training
+deepspeed>=0.14.0
+
+# Deduplication
+datasketch>=1.6.4
+
+# Experiment tracking
+wandb>=0.17.0
+tensorboard>=2.16.0
+
+# Utilities
+numpy>=1.26.0
+scikit-learn>=1.5.0
+tqdm>=4.66.0
+pyyaml>=6.0.0
+rich>=13.7.0
+psutil>=6.0.0
+packaging>=24.0
+
+# Tokenization
+sentencepiece>=0.2.0
+protobuf>=4.25.0
+
+# Efficient attention (Linux/CUDA only; skip on Mac)
+# flash-attn>=2.6.0
+
+# Code execution sandbox for evaluation
+# (install separately if needed)
+# pyext>=0.7

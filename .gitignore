@@ -1,0 +1,93 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.egg
+*.egg-info/
+dist/
+build/
+*.so
+.eggs/
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Distribution / packaging
+*.whl
+*.tar.gz
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb
+
+# Testing & coverage
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# MyPy / type checkers
+.mypy_cache/
+.dmypy.json
+
+# Data
+data/raw/
+data/processed/
+*.csv
+*.json
+*.jsonl
+*.parquet
+*.arrow
+*.bin
+*.safetensors
+*.pkl
+*.pickle
+*.h5
+*.hdf5
+
+# Model weights & checkpoints
+*.pt
+*.pth
+*.ckpt
+checkpoints/
+outputs/
+runs/
+saved_models/
+
+# HuggingFace cache
+.cache/
+*.lock
+
+# DeepSpeed outputs
+zero_to_fp32_*
+global_step*/
+
+# Experiment tracking
+wandb/
+tensorboard_logs/
+lightning_logs/
+mlruns/
+
+# Logs
+*.log
+logs/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/settings.json
+.idea/
+*.swp
+*.swo
+
+# Secrets & credentials
+.env
+.env.*
+secrets.yaml
+*.key
