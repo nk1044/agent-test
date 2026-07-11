@@ -22,16 +22,17 @@ logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
-# Recommended 1-2B base models
+# Recommended base models (shorthand aliases → HuggingFace model IDs)
 # ---------------------------------------------------------------------------
 
 RECOMMENDED_MODELS = {
-    "deepseek-coder-1.3b": "deepseek-ai/deepseek-coder-1.3b-base",
+    # 7B coding-focused (primary targets)
+    "qwen2.5-coder-7b": "Qwen/Qwen2.5-Coder-7B",
+    "qwen2.5-coder-7b-instruct": "Qwen/Qwen2.5-Coder-7B-Instruct",
+    "deepseek-coder-v2-lite": "deepseek-ai/DeepSeek-Coder-V2-Lite-Base",
+    # Smaller fallbacks
     "qwen2.5-coder-1.5b": "Qwen/Qwen2.5-Coder-1.5B",
-    "tinyllama-1.1b": "TinyLlama/TinyLlama-1.1B-intermediate-step-1431k-3T",
-    "gemma-2-2b": "google/gemma-2-2b",
-    "stablelm-2-1.6b": "stabilityai/stablelm-2-1_6b",
-    "phi-1.5": "microsoft/phi-1_5",
+    "deepseek-coder-1.3b": "deepseek-ai/deepseek-coder-1.3b-base",
 }
 
 

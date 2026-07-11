@@ -167,7 +167,7 @@ class PretrainConfig:
     cache_dir: Optional[str] = None
 
     # Model
-    base_model: str = "deepseek-ai/deepseek-coder-1.3b-base"
+    base_model: str = "Qwen/Qwen2.5-Coder-7B"
     use_flash_attention: bool = False
 
     # Data

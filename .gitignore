@@ -38,7 +38,7 @@ htmlcov/
 data/raw/
 data/processed/
 *.csv
-*.json
+# *.json
 *.jsonl
 *.parquet
 *.arrow

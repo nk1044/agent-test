@@ -15,13 +15,13 @@ Configuration:
   - Stages can be run selectively with --stages flag
 
 Quick start (single GPU, minimal config):
-    BASE_MODEL=deepseek-ai/deepseek-coder-1.3b-base \\
+    BASE_MODEL=Qwen/Qwen2.5-Coder-7B \\
     CODING_DATASETS="taco apps code_contests" \\
     python train.py
 
 Full run with distributed training:
     torchrun --nproc_per_node=4 train.py \\
-        --base-model deepseek-ai/deepseek-coder-1.3b-base \\
+        --base-model Qwen/Qwen2.5-Coder-7B \\
         --datasets taco apps code_contests codeforces \\
         --stages data pretrain sft eval \\
         --pretrain-config config/pretrain.yaml \\
@@ -55,7 +55,7 @@ def parse_args():
         "--base-model",
         default=None,
         help="HuggingFace model ID or local path (overrides BASE_MODEL env var). "
-             "Default: deepseek-ai/deepseek-coder-1.3b-base",
+             "Default: Qwen/Qwen2.5-Coder-7B",
     )
     parser.add_argument(
         "--datasets",
@@ -284,7 +284,7 @@ def main():
     base_model = (
         args.base_model
         or os.environ.get("BASE_MODEL")
-        or "deepseek-ai/deepseek-coder-1.3b-base"
+        or "Qwen/Qwen2.5-Coder-7B"
     )
     logger.info("Base model: %s", base_model)
 

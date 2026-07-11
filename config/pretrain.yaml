@@ -2,7 +2,7 @@
 stage: pretrain
 
 # Model
-base_model: "deepseek-ai/deepseek-coder-1.3b-base"  # override via BASE_MODEL env var
+base_model: "Qwen/Qwen2.5-Coder-7B"  # override via BASE_MODEL env var
 
 # Data
 data:

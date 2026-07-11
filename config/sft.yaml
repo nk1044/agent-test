@@ -3,7 +3,7 @@ stage: sft
 
 # Model — start from pretrained checkpoint or base model
 base_model: "./outputs/pretrain/best_model"  # or original base model
-# base_model: "deepseek-ai/deepseek-coder-1.3b-base"
+# base_model: "Qwen/Qwen2.5-Coder-7B"
 
 # Data
 data:
