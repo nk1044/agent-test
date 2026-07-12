@@ -6,8 +6,10 @@ Runs the full pipeline end-to-end:
   1. Download + preprocess datasets
   2. Continued pretraining (CPT)
   3. Supervised fine-tuning (SFT)
-  4. Evaluation on test set
-  (5. Export to GGUF is done separately via scripts/export_gguf.sh)
+  4. GRPO-based RLVR (verifiable reward from test case execution)
+  5. Rejection Sampling Fine-Tuning (RFT)
+  6. Evaluation on test set
+  (Export to GGUF is done separately via scripts/export_gguf.sh)
 
 Configuration:
   - Dataset names are set via CODING_DATASETS (env var or --datasets flag)
@@ -17,13 +19,14 @@ Configuration:
 Quick start (single GPU, minimal config):
     BASE_MODEL=Qwen/Qwen2.5-Coder-7B \\
     CODING_DATASETS="taco apps code_contests" \\
-    python train.py
+    python train.py --stages data pretrain sft rl rft eval
 
 Full run with distributed training:
     torchrun --nproc_per_node=4 train.py \\
         --base-model Qwen/Qwen2.5-Coder-7B \\
         --datasets taco apps code_contests codeforces \\
-        --stages data pretrain sft eval \\
+        --stages data pretrain sft rl rft eval \\
+        --rl-rounds 3 \\
         --pretrain-config config/pretrain.yaml \\
         --sft-config config/sft.yaml \\
         --output-dir ./outputs
@@ -79,8 +82,8 @@ def parse_args():
         "--stages",
         nargs="+",
         default=["data", "pretrain", "sft", "eval"],
-        choices=["data", "pretrain", "sft", "rft", "rl", "eval"],
-        help="Which pipeline stages to run. Recommended full run: data pretrain sft rft rl eval",
+        choices=["data", "pretrain", "sft", "rl", "rft", "eval"],
+        help="Which pipeline stages to run. Recommended full run: data pretrain sft rl rft eval",
     )
 
     # Config files
@@ -421,10 +424,6 @@ def main():
             args, sft_start_model, data_paths, args.output_dir
         )
 
-    # ── Stage: Rejection Sampling Fine-Tuning ────────────────────────────
-    if "rft" in stages:
-        final_model_path = run_rft_stage(args, final_model_path, args.output_dir)
-
     # ── Stage: RLVR (GRPO) — supports multiple iterative rounds ──────────
     if "rl" in stages:
         for rl_round in range(1, args.rl_rounds + 1):
@@ -440,6 +439,10 @@ def main():
                 else:
                     difficulty = "hard"        # hard only in round 3
             final_model_path = run_rl_stage(args, final_model_path, args.output_dir, round_num=rl_round, difficulty=difficulty)
+
+    # ── Stage: Rejection Sampling Fine-Tuning (runs on RL output) ────────
+    if "rft" in stages:
+        final_model_path = run_rft_stage(args, final_model_path, args.output_dir)
 
     # ── Stage: Evaluation ─────────────────────────────────────────────────
     if "eval" in stages and Path(data_paths.get("test", "")).exists():

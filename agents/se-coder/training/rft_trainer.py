@@ -42,8 +42,6 @@ class SERFTConfig:
     output_dir: str = "./outputs/rft"
     verified_file: str = "./outputs/rft/rft_verified.jsonl"
 
-    use_flash_attention: bool = False
-
     # Sampling
     num_candidates: int = 12
     max_new_tokens: int = 2048
