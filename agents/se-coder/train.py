@@ -53,10 +53,14 @@ def parse_args():
                         help="Dataset names (overrides SE_DATASETS env var)")
     parser.add_argument("--stages", nargs="+",
                         default=["data", "pretrain", "sft", "eval"],
-                        choices=["data", "pretrain", "sft", "eval"],
+                        choices=["data", "pretrain", "sft", "rl", "rft", "eval"],
                         help="Pipeline stages to run")
     parser.add_argument("--pretrain-config", default="config/pretrain.yaml")
     parser.add_argument("--sft-config", default="config/sft.yaml")
+    parser.add_argument("--rl-config", default="config/rl.yaml")
+    parser.add_argument("--rft-config", default="config/rft.yaml")
+    parser.add_argument("--rl-rounds", type=int, default=1,
+                        help="Number of RL rounds with automatic curriculum (1=all, 2=code+sql, 3=code only)")
     parser.add_argument("--output-dir", default="./outputs")
     parser.add_argument("--data-dir", default="./data/processed")
     parser.add_argument("--cache-dir", default="./data/raw")
@@ -167,6 +171,80 @@ def run_sft_stage(args, base_model: str, data_paths: dict, output_dir: str) -> s
     return run_sft(cfg)
 
 
+def run_rl_stage(args, model_path: str, data_paths: dict, output_dir: str, round_num: int = 1) -> str:
+    from training.rl_trainer import SEGRPOConfig, run_se_rl_training
+
+    logger.info("=== STAGE: Reinforcement Learning (round %d) ===", round_num)
+
+    config_file = args.rl_config
+    config = load_yaml(config_file) if Path(config_file).exists() else {}
+
+    # Curriculum: narrow record types each round
+    # Round 1: all verifiable (code + debug + sql)
+    # Round 2: code + debug only (drop sql — focus on execution correctness)
+    # Round 3: code only (hardest — full implementation tasks)
+    code_types_by_round = {
+        1: ["code", "debug", "sql"],
+        2: ["code", "debug"],
+        3: ["code"],
+    }
+    code_types = code_types_by_round.get(round_num, ["code", "debug", "sql"])
+
+    rl_output = os.path.join(output_dir, f"rl/round{round_num}")
+    cfg = SEGRPOConfig(
+        base_model=model_path,
+        sft_train_file=data_paths.get("sft_train", "./data/processed/sft_train.jsonl"),
+        rl_output_dir=rl_output,
+        code_types=code_types,
+        num_generations=config.get("grpo", {}).get("num_generations", 6),
+        max_new_tokens=config.get("grpo", {}).get("max_new_tokens", 3072),
+        temperature=config.get("grpo", {}).get("temperature", 0.85),
+        top_p=config.get("grpo", {}).get("top_p", 0.95),
+        kl_coeff=config.get("grpo", {}).get("kl_coeff", 0.04),
+        num_train_epochs=config.get("training", {}).get("num_train_epochs", 2),
+        per_device_train_batch_size=config.get("training", {}).get("per_device_train_batch_size", 1),
+        gradient_accumulation_steps=args.grad_accum or config.get("training", {}).get("gradient_accumulation_steps", 16),
+        learning_rate=config.get("training", {}).get("learning_rate", 5e-7),
+        seed=args.seed,
+        deepspeed_config=args.deepspeed or config.get("deepspeed_config"),
+        report_to=["tensorboard"] if args.no_wandb else ["wandb", "tensorboard"],
+        run_name=f"se-llm-rl-r{round_num}",
+        timeout_seconds=config.get("sandbox", {}).get("timeout_seconds", 8.0),
+        use_flash_attention=args.flash_attention,
+    )
+    return run_se_rl_training(cfg)
+
+
+def run_rft_stage(args, model_path: str, data_paths: dict, output_dir: str) -> str:
+    from training.rft_trainer import SERFTConfig, run_rejection_sampling
+
+    logger.info("=== STAGE: Rejection Sampling Fine-Tuning ===")
+
+    config_file = args.rft_config
+    config = load_yaml(config_file) if Path(config_file).exists() else {}
+
+    rft_output = os.path.join(output_dir, "rft")
+    cfg = SERFTConfig(
+        base_model=model_path,
+        sft_train_file=data_paths.get("sft_train", "./data/processed/sft_train.jsonl"),
+        output_dir=rft_output,
+        verified_file=os.path.join(rft_output, "rft_verified.jsonl"),
+        num_candidates=config.get("num_candidates", 12),
+        max_new_tokens=config.get("max_new_tokens", 2048),
+        temperature=config.get("temperature", 0.8),
+        timeout_seconds=config.get("sandbox", {}).get("timeout_seconds", 8.0),
+        sft_epochs=config.get("training", {}).get("sft_epochs", 1),
+        learning_rate=config.get("training", {}).get("learning_rate", 5e-6),
+        per_device_train_batch_size=args.batch_size or config.get("training", {}).get("per_device_train_batch_size", 2),
+        gradient_accumulation_steps=args.grad_accum or config.get("training", {}).get("gradient_accumulation_steps", 16),
+        seed=args.seed,
+        deepspeed_config=args.deepspeed or config.get("deepspeed_config"),
+        report_to=["tensorboard"] if args.no_wandb else ["wandb", "tensorboard"],
+        use_flash_attention=args.flash_attention,
+    )
+    return run_rejection_sampling(cfg)
+
+
 def run_eval_stage(args, model_path: str, data_paths: dict, output_dir: str):
     from evaluation.se_evaluator import SEEvaluator, load_test_records
     from model.model_utils import load_model_and_tokenizer
@@ -241,16 +319,28 @@ def main():
     if "pretrain" in stages:
         pretrained_model_path = run_pretrain_stage(args, base_model, data_paths, args.output_dir)
 
-    final_model_path = pretrained_model_path
+    sft_model_path = pretrained_model_path
     if "sft" in stages:
-        final_model_path = run_sft_stage(args, pretrained_model_path, data_paths, args.output_dir)
+        sft_model_path = run_sft_stage(args, pretrained_model_path, data_paths, args.output_dir)
+
+    final_model_path = sft_model_path
+
+    # Multi-round RL curriculum: each round narrows the record types
+    if "rl" in stages:
+        rl_model_path = sft_model_path
+        for round_num in range(1, args.rl_rounds + 1):
+            rl_model_path = run_rl_stage(args, rl_model_path, data_paths, args.output_dir, round_num=round_num)
+        final_model_path = rl_model_path
+
+    if "rft" in stages:
+        final_model_path = run_rft_stage(args, final_model_path, data_paths, args.output_dir)
 
     if "eval" in stages and Path(data_paths.get("test", "")).exists():
         run_eval_stage(args, final_model_path, data_paths, args.output_dir)
 
     logger.info("=== SE Training Pipeline Complete ===")
     logger.info("Final model: %s", final_model_path)
-    logger.info("Next: python scripts/export_gguf.sh --model %s", final_model_path)
+    logger.info("Next: bash agents/se-coder/scripts/export_gguf.sh --model %s", final_model_path)
 
 
 if __name__ == "__main__":

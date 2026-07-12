@@ -1,0 +1,33 @@
+# Rejection Sampling Fine-Tuning Configuration — Software Engineering Specialist
+# Run after RL: python train.py --stages rft
+stage: rft
+
+# Base model (set to RL output checkpoint)
+base_model: "./outputs/rl/best_model"
+
+# Candidate generation
+num_candidates: 12        # solutions sampled per problem
+max_new_tokens: 2048
+temperature: 0.8
+
+# Verification
+# Python: runs without error
+# SQL: executes in SQLite
+# Other: contains syntactically valid code block
+verified_file: "./outputs/rft/rft_verified.jsonl"
+
+# SFT on verified data
+training:
+  output_dir: "./outputs/rft"
+  sft_epochs: 1
+  learning_rate: 5.0e-6
+  per_device_train_batch_size: 2
+  gradient_accumulation_steps: 16
+  seed: 42
+  report_to: ["wandb", "tensorboard"]
+  run_name: "se-llm-rft"
+
+sandbox:
+  timeout_seconds: 8.0
+
+deepspeed_config: "./config/ds_zero2.json"

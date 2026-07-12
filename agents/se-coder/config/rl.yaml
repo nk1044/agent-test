@@ -1,0 +1,48 @@
+# GRPO-based RLVR Configuration — Software Engineering Specialist
+# Run after SFT: python train.py --stages rl
+stage: rl
+
+# Base model (set to SFT output checkpoint)
+base_model: "./outputs/sft/best_model"
+
+# Training hyperparameters
+training:
+  output_dir: "./outputs/rl"
+  num_train_epochs: 2
+  per_device_train_batch_size: 1       # keep low; GRPO generates G solutions per step
+  gradient_accumulation_steps: 16
+  learning_rate: 5.0e-7                # much lower than SFT — fine policy adjustment
+  lr_scheduler_type: "cosine"
+  warmup_ratio: 0.05
+  bf16: true
+  gradient_checkpointing: true
+  logging_steps: 5
+  save_steps: 100
+  save_total_limit: 2
+  seed: 42
+  report_to: ["wandb", "tensorboard"]
+  run_name: "se-llm-rl"
+
+# GRPO-specific generation parameters
+grpo:
+  num_generations: 6         # G: solutions sampled per problem per step
+  max_new_tokens: 3072
+  temperature: 0.85           # exploration
+  top_p: 0.95
+  kl_coeff: 0.04              # KL penalty against reference policy
+
+# Reward function — execution-dominant
+# Python code: 0.0 (syntax error) | 0.3 (runtime error) | 1.0 (success)
+# SQL code:    0.0 (not SQL)      | 0.5 (syntax ok)     | 1.0 (executes)
+# Format bonus: 0.1 (has code fences)
+# Reasoning bonus: 0.08 (<think> block present)
+# Self-test bonus: 0.15 (model writes + passes its own <tests>)
+
+# Code execution sandbox
+sandbox:
+  timeout_seconds: 8.0
+
+# Record types to include in RL training (must be verifiable)
+code_types: ["code", "debug", "sql"]
+
+deepspeed_config: "./config/ds_zero2.json"
