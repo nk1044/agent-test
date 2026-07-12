@@ -176,8 +176,8 @@ def run_rejection_sampling(cfg: RFTConfig) -> str:
     Run RFT: generate → verify → save → SFT.
     Returns path to the best model after SFT on verified data.
     """
-    from ..model.model_utils import load_model_and_tokenizer, save_model
-    from ..training.sft_trainer import SFTConfig, run_sft
+    from model.model_utils import load_model_and_tokenizer, save_model
+    from training.sft_trainer import SFTConfig, run_sft
 
     Path(cfg.output_dir).mkdir(parents=True, exist_ok=True)
 
@@ -297,7 +297,7 @@ def run_rejection_sampling(cfg: RFTConfig) -> str:
         deepspeed_config=cfg.deepspeed_config,
     )
 
-    from ..training.sft_trainer import run_sft
+    from training.sft_trainer import run_sft
     best_model = run_sft(sft_cfg)
     logger.info("RFT complete. Best model: %s", best_model)
     return best_model

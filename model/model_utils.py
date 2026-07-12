@@ -96,7 +96,6 @@ def load_model(
         trust_remote_code=True,
     )
 
-    # Enable sliding window / RoPE scaling if needed for long contexts
     if hasattr(config, "max_position_embeddings") and config.max_position_embeddings < 4096:
         logger.warning(
             "Model max_position_embeddings=%d < 4096. Consider a model with longer context.",
@@ -121,7 +120,6 @@ def load_model(
         model.gradient_checkpointing_enable(gradient_checkpointing_kwargs={"use_reentrant": False})
         logger.info("Gradient checkpointing enabled")
 
-    # Log parameter count
     total = sum(p.numel() for p in model.parameters())
     trainable = sum(p.numel() for p in model.parameters() if p.requires_grad)
     logger.info(
@@ -168,7 +166,6 @@ def save_model(
     """Save model + tokenizer in HuggingFace format."""
     Path(output_dir).mkdir(parents=True, exist_ok=True)
 
-    # If model is wrapped (DeepSpeed, DDP), unwrap first
     unwrapped = model
     if hasattr(model, "module"):
         unwrapped = model.module

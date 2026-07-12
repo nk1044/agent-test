@@ -2,14 +2,12 @@
 Supervised Fine-Tuning (SFT) stage.
 
 Trains on (prompt, solution) pairs where the loss is applied only to the
-response tokens (the solution), not the prompt. This teaches the model
-to generate complete algorithmic solutions given a problem statement.
+response tokens (the solution), not the prompt.
 
 Supports:
   - Full-parameter training (no LoRA)
   - Prompt masking (loss only on response)
   - Mixed precision, gradient checkpointing, DeepSpeed
-  - Sequence packing via TRL's SFTTrainer
   - Resumable from checkpoint
 """
 
@@ -32,7 +30,7 @@ from transformers import (
 )
 
 from data.builder import load_jsonl_as_hf_dataset
-from shared.model.model_utils import load_model_and_tokenizer, save_model
+from model.model_utils import load_model_and_tokenizer, save_model
 from .callbacks import (
     CheckpointMetadataCallback,
     EarlyStoppingOnNaN,
@@ -100,7 +98,6 @@ class SFTDataset(torch.utils.data.Dataset):
         labels = list(input_ids)
 
         if not self.train_on_prompt:
-            # Find where the response starts and mask prompt tokens
             prompt_enc = self.tokenizer(
                 prompt,
                 add_special_tokens=True,
@@ -112,7 +109,6 @@ class SFTDataset(torch.utils.data.Dataset):
             for i in range(min(prompt_len, len(labels))):
                 labels[i] = self.IGNORE_INDEX
 
-        # Skip examples where all labels are masked
         if all(l == self.IGNORE_INDEX for l in labels):
             return None
 
@@ -173,7 +169,7 @@ class SFTConfig:
     output_dir: str = "./outputs/sft"
     cache_dir: Optional[str] = None
 
-    # Model (can be pretrained checkpoint or original base model)
+    # Model
     base_model: str = "./outputs/pretrain/best_model"
     use_flash_attention: bool = False
 
@@ -210,13 +206,10 @@ class SFTConfig:
 
 
 def run_sft(cfg: SFTConfig) -> str:
-    """
-    Run supervised fine-tuning. Returns path to the best model.
-    """
+    """Run supervised fine-tuning. Returns path to the best model."""
     logger.info("=== Supervised Fine-Tuning ===")
     Path(cfg.output_dir).mkdir(parents=True, exist_ok=True)
 
-    # Load model + tokenizer
     model, tokenizer = load_model_and_tokenizer(
         cfg.base_model,
         cache_dir=cfg.cache_dir,
@@ -224,11 +217,9 @@ def run_sft(cfg: SFTConfig) -> str:
         gradient_checkpointing=cfg.gradient_checkpointing,
     )
 
-    # Load data
     raw_train = load_jsonl_as_hf_dataset(cfg.train_file)
     raw_val = load_jsonl_as_hf_dataset(cfg.val_file)
 
-    # Build datasets
     train_dataset = SFTDataset(
         raw_train, tokenizer, cfg.max_seq_length,
         prompt_field=cfg.prompt_field,
@@ -247,8 +238,8 @@ def run_sft(cfg: SFTConfig) -> str:
     logger.info("SFT train: %d | val: %d examples", len(train_dataset), len(val_dataset))
 
     collator = SFTCollator(tokenizer)
-
     report_to = cfg.report_to or ["none"]
+
     training_args = TrainingArguments(
         output_dir=cfg.output_dir,
         overwrite_output_dir=True,
@@ -311,8 +302,7 @@ def run_sft(cfg: SFTConfig) -> str:
     metrics = trainer.evaluate()
     logger.info("Final SFT val metrics: %s", metrics)
 
-    metrics_path = os.path.join(cfg.output_dir, "sft_metrics.json")
-    with open(metrics_path, "w") as f:
+    with open(os.path.join(cfg.output_dir, "sft_metrics.json"), "w") as f:
         json.dump(metrics, f, indent=2)
 
     logger.info("SFT complete. Best model at: %s", best_model_dir)

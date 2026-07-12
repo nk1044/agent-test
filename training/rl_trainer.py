@@ -401,7 +401,7 @@ def run_rl_training(cfg: RLConfig) -> str:
     except ImportError:
         raise ImportError("trl >= 0.9.0 required for GRPOTrainer. Run: pip install trl>=0.9.0")
 
-    from ..model.model_utils import load_model_and_tokenizer, save_model
+    from model.model_utils import load_model_and_tokenizer, save_model
     from .callbacks import CheckpointMetadataCallback, RichProgressCallback
 
     logger.info("=== RLVR Training (GRPO) ===")

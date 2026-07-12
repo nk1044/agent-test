@@ -32,12 +32,12 @@ Full run with distributed training:
 import os
 import sys
 
-# --- path setup so 'shared' and agent-local packages are importable ---
+# --- path setup so root packages and agent-local packages are importable ---
 _AGENT_DIR = os.path.dirname(os.path.abspath(__file__))
 _PROJECT_ROOT = os.path.dirname(os.path.dirname(_AGENT_DIR))
-sys.path.insert(0, _PROJECT_ROOT)   # enables: from shared.X import ...
-sys.path.insert(0, _AGENT_DIR)      # enables: from data.X import ..., from evaluation.X import ...
-# ----------------------------------------------------------------------
+sys.path.insert(0, _PROJECT_ROOT)   # enables: from model.X, from training.X, from utils.X
+sys.path.insert(0, _AGENT_DIR)      # enables: from data.X, from evaluation.X
+# ---------------------------------------------------------------------------
 
 import argparse
 import logging

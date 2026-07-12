@@ -34,8 +34,8 @@ from typing import Optional
 # Path setup — must be before any project imports
 _AGENT_DIR = os.path.dirname(os.path.abspath(__file__))
 _PROJECT_ROOT = os.path.dirname(os.path.dirname(_AGENT_DIR))
-sys.path.insert(0, _PROJECT_ROOT)   # enables: from shared.X import ...
-sys.path.insert(0, _AGENT_DIR)      # enables: from data.X import ..., from evaluation.X import ...
+sys.path.insert(0, _PROJECT_ROOT)   # enables: from model.X, from training.X, from utils.X
+sys.path.insert(0, _AGENT_DIR)      # enables: from data.X, from evaluation.X
 
 from utils.helpers import load_yaml, save_yaml, set_seed, setup_logging
 
@@ -111,7 +111,7 @@ def run_data_stage(args, datasets: list, data_dir: str) -> dict:
 
 
 def run_pretrain_stage(args, base_model: str, data_paths: dict, output_dir: str) -> str:
-    from shared.training.pretrain_trainer import PretrainConfig, run_pretraining
+    from training.pretrain_trainer import PretrainConfig, run_pretraining
 
     logger.info("=== STAGE: Continued Pretraining ===")
 
@@ -140,7 +140,7 @@ def run_pretrain_stage(args, base_model: str, data_paths: dict, output_dir: str)
 
 
 def run_sft_stage(args, base_model: str, data_paths: dict, output_dir: str) -> str:
-    from shared.training.sft_trainer import SFTConfig, run_sft
+    from training.sft_trainer import SFTConfig, run_sft
 
     logger.info("=== STAGE: Supervised Fine-Tuning ===")
 
@@ -169,7 +169,7 @@ def run_sft_stage(args, base_model: str, data_paths: dict, output_dir: str) -> s
 
 def run_eval_stage(args, model_path: str, data_paths: dict, output_dir: str):
     from evaluation.se_evaluator import SEEvaluator, load_test_records
-    from shared.model.model_utils import load_model_and_tokenizer
+    from model.model_utils import load_model_and_tokenizer
     import torch
 
     logger.info("=== STAGE: Evaluation ===")

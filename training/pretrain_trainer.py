@@ -1,8 +1,8 @@
 """
 Continued pretraining stage.
 
-Trains the base model on the competitive programming corpus using a causal
-language-modeling objective (next-token prediction on packed sequences).
+Trains the base model on the corpus using a causal language-modeling objective
+(next-token prediction on packed sequences).
 
 Supports:
   - Full-parameter training (no LoRA)
@@ -34,7 +34,7 @@ from transformers import (
 )
 
 from data.builder import load_jsonl_as_hf_dataset
-from shared.model.model_utils import load_model_and_tokenizer, save_model
+from model.model_utils import load_model_and_tokenizer, save_model
 from .callbacks import (
     CheckpointMetadataCallback,
     EarlyStoppingOnNaN,
@@ -66,7 +66,6 @@ class PackedDataset(torch.utils.data.Dataset):
         self.max_seq_length = max_seq_length
         logger.info("Tokenizing and packing %d documents ...", len(raw_dataset))
 
-        # Tokenize all documents
         def tokenize(batch):
             return tokenizer(
                 batch[text_field],
@@ -82,14 +81,12 @@ class PackedDataset(torch.utils.data.Dataset):
             desc="Tokenizing",
         )
 
-        # Concatenate all token IDs and split into chunks
         all_ids: List[int] = []
         eos_id = tokenizer.eos_token_id or tokenizer.pad_token_id or 0
         for item in tokenized:
             all_ids.extend(item["input_ids"])
-            all_ids.append(eos_id)  # document separator
+            all_ids.append(eos_id)
 
-        # Chop into chunks of max_seq_length
         self.chunks: List[List[int]] = [
             all_ids[i : i + max_seq_length]
             for i in range(0, len(all_ids) - max_seq_length, max_seq_length)
@@ -243,13 +240,10 @@ def build_training_args(cfg: PretrainConfig) -> TrainingArguments:
 
 
 def run_pretraining(cfg: PretrainConfig) -> str:
-    """
-    Run continued pretraining. Returns path to the best model checkpoint.
-    """
+    """Run continued pretraining. Returns path to the best model checkpoint."""
     logger.info("=== Continued Pretraining ===")
     Path(cfg.output_dir).mkdir(parents=True, exist_ok=True)
 
-    # Load model + tokenizer
     model, tokenizer = load_model_and_tokenizer(
         cfg.base_model,
         cache_dir=cfg.cache_dir,
@@ -257,12 +251,10 @@ def run_pretraining(cfg: PretrainConfig) -> str:
         gradient_checkpointing=cfg.gradient_checkpointing,
     )
 
-    # Load raw JSONL datasets
     logger.info("Loading training data from %s", cfg.train_file)
     raw_train = load_jsonl_as_hf_dataset(cfg.train_file, text_field=cfg.text_field)
     raw_val = load_jsonl_as_hf_dataset(cfg.val_file, text_field=cfg.text_field)
 
-    # Build tokenized datasets
     DatasetClass = PackedDataset if cfg.packing else SimpleTokenizedDataset
     train_dataset = DatasetClass(
         raw_train, tokenizer, cfg.max_seq_length,
@@ -277,13 +269,9 @@ def run_pretraining(cfg: PretrainConfig) -> str:
 
     logger.info("Train size: %d chunks | Val size: %d chunks", len(train_dataset), len(val_dataset))
 
-    # Data collator — no masking, just pad (packing already handles full sequences)
     collator = DataCollatorForLanguageModeling(tokenizer=tokenizer, mlm=False)
-
-    # Training arguments
     training_args = build_training_args(cfg)
 
-    # Callbacks
     callbacks = [
         RichProgressCallback(),
         EarlyStoppingOnNaN(),
@@ -291,7 +279,6 @@ def run_pretraining(cfg: PretrainConfig) -> str:
         TokenThroughputCallback(),
     ]
 
-    # Trainer
     trainer = Trainer(
         model=model,
         args=training_args,
@@ -302,23 +289,18 @@ def run_pretraining(cfg: PretrainConfig) -> str:
         callbacks=callbacks,
     )
 
-    # Run training (resume if checkpoint provided)
     logger.info("Starting training ...")
     trainer.train(resume_from_checkpoint=cfg.resume_from_checkpoint)
 
-    # Save best model
     best_model_dir = os.path.join(cfg.output_dir, "best_model")
     save_model(trainer.model, tokenizer, best_model_dir)
 
-    # Final evaluation
     logger.info("Running final evaluation ...")
     metrics = trainer.evaluate()
     logger.info("Final val metrics: %s", metrics)
 
-    # Log metrics to file
-    metrics_path = os.path.join(cfg.output_dir, "pretrain_metrics.json")
     import json
-    with open(metrics_path, "w") as f:
+    with open(os.path.join(cfg.output_dir, "pretrain_metrics.json"), "w") as f:
         json.dump(metrics, f, indent=2)
 
     logger.info("Pretraining complete. Best model at: %s", best_model_dir)

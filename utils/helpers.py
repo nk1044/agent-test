@@ -29,7 +29,6 @@ def setup_logging(
         force=True,
     )
 
-    # Quiet noisy libraries
     for lib in ("urllib3", "filelock", "git", "PIL"):
         logging.getLogger(lib).setLevel(logging.WARNING)
 
